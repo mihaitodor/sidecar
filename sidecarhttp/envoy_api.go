@@ -3,6 +3,7 @@ package sidecarhttp
 //go:generate ffjson $GOFILE
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"github.com/Nitro/sidecar/catalog"
 	"github.com/Nitro/sidecar/service"
 	"github.com/gorilla/mux"
-	"github.com/pquerna/ffjson/ffjson"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -39,14 +39,25 @@ type EnvoyService struct {
 	Tags            map[string]string `json:"tags"`
 }
 
+type EnvoyCircuitBreaker map[string]EnvoyCircuitBreakerConfig
+
 // See https://www.envoyproxy.io/docs/envoy/latest/api-v1/cluster_manager/cluster.html
 type EnvoyCluster struct {
-	Name             string `json:"name"`
-	Type             string `json:"type"`
-	ConnectTimeoutMs int64  `json:"connect_timeout_ms"`
-	LBType           string `json:"lb_type"`
-	ServiceName      string `json:"service_name"`
+	Name                     string               `json:"name"`
+	Type                     string               `json:"type"`
+	ConnectTimeoutMs         int64                `json:"connect_timeout_ms"`
+	LBType                   string               `json:"lb_type"`
+	ServiceName              string               `json:"service_name"`
+	MaxRequestsPerConnection int64                `json:"max_requests_per_connection,omitempty"`
+	CircuitBreakers          *EnvoyCircuitBreaker `json:"circuit_breakers,omitempty"`
 	// Many optional fields omitted
+}
+
+type EnvoyCircuitBreakerConfig struct {
+	MaxConnections     int64 `json:"max_connections"`
+	MaxPendingRequests int64 `json:"max_pending_requests"`
+	MaxRequests        int64 `json:"max_requests"`
+	MaxRetries         int64 `json:"max_retries"`
 }
 
 // https://www.envoyproxy.io/docs/envoy/latest/api-v1/listeners/listeners.html
@@ -164,13 +175,16 @@ func (s *EnvoyApi) registrationHandler(response http.ResponseWriter, req *http.R
 		Service: name,
 	}
 
-	jsonBytes, err := result.MarshalJSON()
-	defer ffjson.Pool(jsonBytes)
+	jsonBytes, err := json.Marshal(result)
+	//jsonBytes, err := result.MarshalJSON()
+	//defer ffjson.Pool(jsonBytes)
 	if err != nil {
 		log.Errorf("Error marshaling state in registrationHandler: %s", err.Error())
 		sendJsonError(response, 500, "Internal server error")
 		return
 	}
+
+	log.Infof("Sidecar Service Discovery JSON sent to Envoy: %s", string(jsonBytes))
 
 	response.Write(jsonBytes)
 }
@@ -188,18 +202,25 @@ func (s *EnvoyApi) clustersHandler(response http.ResponseWriter, req *http.Reque
 
 	clusters := s.EnvoyClustersFromState()
 
+	if len(clusters) != 0 {
+		log.Infof("Sidecar clusters to sent to Envoy: %+v", *clusters[0])
+	}
+
 	log.Debugf("Reporting Envoy cluster information for cluster '%s' and node '%s'",
 		params["service_cluster"], params["service_node"])
 
 	result := CDSResult{clusters}
 
-	jsonBytes, err := result.MarshalJSON()
-	defer ffjson.Pool(jsonBytes)
+	jsonBytes, err := json.Marshal(result)
+	//jsonBytes, err := result.MarshalJSON()
+	//defer ffjson.Pool(jsonBytes)
 	if err != nil {
 		log.Errorf("Error marshaling state in servicesHandler: %s", err.Error())
 		sendJsonError(response, 500, "Internal server error")
 		return
 	}
+
+	log.Infof("Sidecar Cluster Discovery JSON sent to Envoy: %s", string(jsonBytes))
 
 	response.Write(jsonBytes)
 }
@@ -221,13 +242,16 @@ func (s *EnvoyApi) listenersHandler(response http.ResponseWriter, req *http.Requ
 	listeners := s.EnvoyListenersFromState()
 
 	result := LDSResult{listeners}
-	jsonBytes, err := result.MarshalJSON()
-	defer ffjson.Pool(jsonBytes)
+	jsonBytes, err := json.Marshal(result)
+	//jsonBytes, err := result.MarshalJSON()
+	//defer ffjson.Pool(jsonBytes)
 	if err != nil {
 		log.Errorf("Error marshaling state in servicesHandler: %s", err.Error())
 		sendJsonError(response, 500, "Internal server error")
 		return
 	}
+
+	log.Infof("Sidecar Listener Discovery JSON sent to Envoy: %s", string(jsonBytes))
 
 	response.Write(jsonBytes)
 }
@@ -314,11 +338,27 @@ func (s *EnvoyApi) EnvoyClustersFromState() []*EnvoyCluster {
 			}
 
 			clusters = append(clusters, &EnvoyCluster{
-				Name:             SvcName(svcName, port.ServicePort),
-				Type:             "sds", // use Sidecar's SDS endpoint for the hosts
-				ConnectTimeoutMs: 500,
-				LBType:           "round_robin", // TODO figure this out!
-				ServiceName:      SvcName(svcName, port.ServicePort),
+				Name:                     SvcName(svcName, port.ServicePort),
+				Type:                     "sds", // use Sidecar's SDS endpoint for the hosts
+				ConnectTimeoutMs:         500,
+				LBType:                   "round_robin", // TODO figure this out!
+				ServiceName:              SvcName(svcName, port.ServicePort),
+				MaxRequestsPerConnection: 800,
+				//CircuitBreakers: &EnvoyCircuitBreaker{},
+				CircuitBreakers: &EnvoyCircuitBreaker{
+					"default": EnvoyCircuitBreakerConfig{
+						MaxConnections:     1024,
+						MaxPendingRequests: 1024,
+						MaxRequests:        1024,
+						MaxRetries:         3,
+					},
+					"high": EnvoyCircuitBreakerConfig{
+						MaxConnections:     2048,
+						MaxPendingRequests: 2048,
+						MaxRequests:        2048,
+						MaxRetries:         3,
+					},
+				},
 			})
 		}
 	}
