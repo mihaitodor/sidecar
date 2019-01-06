@@ -132,6 +132,11 @@ func configureDiscovery(config *Config, publishedIP string) discovery.Discoverer
 				disco.Discoverers,
 				discovery.NewStaticDiscovery(config.StaticDiscovery.ConfigFile, publishedIP),
 			)
+		case "kubelet":
+			disco.Discoverers = append(
+				disco.Discoverers,
+				discovery.NewKubeletDiscovery(config.KubeletDiscovery.URL, publishedIP),
+			)
 		default:
 		}
 	}

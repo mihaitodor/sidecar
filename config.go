@@ -53,13 +53,18 @@ type StaticConfig struct {
 	ConfigFile string `envconfig:"CONFIG_FILE" default:"static.json"`
 }
 
+type KubeletConfig struct {
+	URL string `envconfig:"URL" default:"https://localhost:10250/pods/"`
+}
+
 type Config struct {
-	Sidecar         SidecarConfig      // SIDECAR_
-	DockerDiscovery DockerConfig       // DOCKER_
-	StaticDiscovery StaticConfig       // STATIC_
-	Services        ServicesConfig     // SERVICES_
-	HAproxy         HAproxyConfig      // HAPROXY_
-	Listeners       ListenerUrlsConfig // LISTENERS_
+	Sidecar          SidecarConfig      // SIDECAR_
+	DockerDiscovery  DockerConfig       // DOCKER_
+	StaticDiscovery  StaticConfig       // STATIC_
+	KubeletDiscovery KubeletConfig      // KUBELET_
+	Services         ServicesConfig     // SERVICES_
+	HAproxy          HAproxyConfig      // HAPROXY_
+	Listeners        ListenerUrlsConfig // LISTENERS_
 }
 
 func parseConfig() Config {
@@ -69,6 +74,7 @@ func parseConfig() Config {
 		envconfig.Process("sidecar", &config.Sidecar),
 		envconfig.Process("docker", &config.DockerDiscovery),
 		envconfig.Process("static", &config.StaticDiscovery),
+		envconfig.Process("kubelet", &config.KubeletDiscovery),
 		envconfig.Process("services", &config.Services),
 		envconfig.Process("haproxy", &config.HAproxy),
 		envconfig.Process("listeners", &config.Listeners),
