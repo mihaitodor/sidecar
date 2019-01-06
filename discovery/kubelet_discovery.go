@@ -195,8 +195,8 @@ func (d *KubeletDiscovery) PodToService(pod *api.Pod) *service.Service {
 	svc.Hostname = pod.Spec.NodeName
 	svc.Status = service.ALIVE
 
-	if _, ok := pod.Annotations["relistan.com/sidecar.ProxyMode"]; ok {
-		svc.ProxyMode = pod.Annotations["relistan.com/sidecar.ProxyMode"]
+	if mode, ok := pod.Annotations["relistan.com/sidecar.ProxyMode"]; ok {
+		svc.ProxyMode = mode
 	} else {
 		svc.ProxyMode = "http"
 	}
@@ -220,6 +220,14 @@ func (d *KubeletDiscovery) PodToService(pod *api.Pod) *service.Service {
 // the health checking state.
 func healthCheckFor(pod *api.Pod) []string {
 	container := pod.Spec.Containers[0]
+
+	// Allow override of any other behavior by use of Annotations
+	if check, ok := pod.Annotations["relistan.com/sidecar.HealthCheck"]; ok {
+		if args, ok := pod.Annotations["relistan.com/sidecar.HealthCheckArgs"]; ok {
+			return []string{check, args}
+		}
+	}
+
 	// Prefer readiness probe when possible
 	if container.ReadinessProbe != nil {
 		if container.ReadinessProbe.HTTPGet != nil {
@@ -236,6 +244,8 @@ func healthCheckFor(pod *api.Pod) []string {
 	return []string{"", ""}
 }
 
+// healthUrlFor turns the funky K8s health check URL format into something we
+// can pass to the healthy library for checking.
 func healthUrlFor(container *api.Container, nodeName string, handler *api.Probe) string {
 	hostPort := handler.HTTPGet.Host
 	if len(hostPort) < 1 {

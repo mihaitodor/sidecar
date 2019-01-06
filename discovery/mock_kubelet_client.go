@@ -13,6 +13,7 @@ type mockKubeletClient struct {
 	ShouldListPodsError bool
 	ShouldNotHaveReadiness bool
 	ShouldNotHaveLiveness bool
+	ShouldHaveCheckAnnotations bool
 }
 
 func (m *mockKubeletClient) ListPods() (*api.PodList, error) {
@@ -29,6 +30,11 @@ func (m *mockKubeletClient) ListPods() (*api.PodList, error) {
 
 	if m.ShouldNotHaveLiveness {
 		pl.Items[0].Spec.Containers[0].LivenessProbe = nil
+	}
+
+	if m.ShouldHaveCheckAnnotations {
+		pl.Items[0].Annotations["relistan.com/sidecar.HealthCheck"] = "Special"
+		pl.Items[0].Annotations["relistan.com/sidecar.HealthCheckArgs"] = "args"
 	}
 
 	return &pl, err

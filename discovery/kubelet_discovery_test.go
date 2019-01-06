@@ -154,6 +154,16 @@ func Test_HealthCheck(t *testing.T) {
 			So(check, ShouldEqual, "")
 			So(args, ShouldEqual, "")
 		})
+
+		Convey("prefers annotations if provided", func() {
+			mockClient.ShouldHaveCheckAnnotations = true
+			disco.getServices()
+
+			check, args := disco.HealthCheck(&service.Service{ID: "0a850edbcf33"})
+
+			So(check, ShouldEqual, "Special")
+			So(args, ShouldEqual, "args")
+		})
 	})
 }
 
