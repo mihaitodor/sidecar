@@ -221,5 +221,12 @@ func Test_KubeletServices(t *testing.T) {
 			So(port.ServicePort, ShouldEqual, 10001)
 			So(port.IP, ShouldEqual, "127.0.0.1")
 		})
+
+		Convey("skips discovery of intentionally excluded pods", func() {
+			mockClient.ShouldSkipDiscovery = true
+			disco.getServices()
+			svcs := disco.Services()
+			So(svcs, ShouldBeEmpty)
+		})
 	})
 }

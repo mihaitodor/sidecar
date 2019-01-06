@@ -129,7 +129,6 @@ func NewKubeletDiscovery(url string, ip string) *KubeletDiscovery {
 		url:          url,
 		client:       NewKubeletClient(url),
 		advertiseIP:  ip,
-		healthChecks: make(map[string][]string),
 		Namer:        defaultNamer,
 	}
 
@@ -166,10 +165,17 @@ func (d *KubeletDiscovery) getServices() {
 	defer d.Unlock()
 
 	// We'll swap out the service list with the new one
-	d.services = make([]*service.Service, len(pods.Items))
-	for i, pod := range pods.Items {
+	d.services = make([]*service.Service, 0) // Won't be nil no matter what
+	d.healthChecks = make(map[string][]string, len(pods.Items)) // Reset!
+	for _, pod := range pods.Items {
+		// Skip discovery of intentionally excluded pods
+		if val, ok := pod.Annotations["relistan.com/sidecar.Discover"]; ok {
+			if val == "false" {
+				continue
+			}
+		}
 		svc := d.PodToService(&pod)
-		d.services[i] = svc
+		d.services = append(d.services, svc)
 		d.healthChecks[svc.ID] = healthCheckFor(&pod)
 	}
 }
