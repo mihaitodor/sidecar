@@ -12,9 +12,10 @@ Sidecar is a dynamic service discovery platform requiring no external
 coordination service. It's a peer-to-peer system that uses a gossip protocol
 for all communication between hosts. Sidecar health checks local services and
 announces them to peer systems. It's Docker-native so your containerized
-applications work out of the box. It's designed to be **A**vailable,
-**P**artition tolerant, and eventually consistent—where "eventually" is a very
-short time window on the matter of a few seconds.
+applications work out of the box. Beyond Docker, it also supports Kubernetes
+natively, by talking directly to the Kubelet API on each host. It's designed to
+be **A**vailable, **P**artition tolerant, and eventually consistent—where
+"eventually" is a very short time window on the matter of a few seconds.
 
 Sidecar is part of a small ecosystem of tools. It can stand entirely alone
 or can also leverage:
@@ -36,18 +37,8 @@ or can also leverage:
    Also supports a number of extra features including Vault integration for
    secrets management.
 
- * [Superside](https://github.com/Nitro/superside) - A multi-environment
-   console for Sidecar. Has a heads up display, event lists, and graphs
-   showing what is happening in one or more Sidecar clusters on a live
-   basis.
-
  * [sidecar-dns](https://github.com/relistan/sidecar-dns) - a working, but
    WIP, project to serve DNS SRV records from Sidecar services state.
-
- * [Traefik plugin](https://github.com/Nitro/traefik) - A fork of Traefik
-   that can be backed by Sidecar. Useful as a gateway from the outside world
-   into a Sidecar-based services environment. Working to get this plugin
-   pushed upstream.
 
 Overview in Brief
 -----------------
@@ -58,7 +49,7 @@ by Airbnb's SmartStack. But, we believe it has a few advantages over
 SmartStack:
 
  * Eventually consistent model - a better fit for real world microservices
- * Native support for Docker (works without Docker, too!)
+ * Native support for Docker, and Kubernetes (works without containers, too!)
  * No dependence on Zookeeper or other centralized services
  * Peer-to-peer, so it works on your laptop or on a large cluster
  * Static binary means it's easy to deploy, and there is no interpreter needed
@@ -153,8 +144,9 @@ Note: `--cluster-ip` will overwrite the values passed into the `SIDECAR_SEEDS` e
 
 ### Running in a Container
 
-The easiest way to deploy Sidecar to your Docker fleet is to run it in a
-container itself. [Instructions for doing that are provided](docker/README.md).
+The easiest way to deploy Sidecar to your Docker fleet or Kubernetes cluster is
+to run it in a container itself. [Instructions for doing that are
+provided](docker/README.md).
 
 Nitro Software maintains builds of the [Docker container
 image](https://hub.docker.com/r/gonitro/sidecar/) on Docker Hub. Note that
@@ -174,7 +166,7 @@ Defaults are in bold at the end of the line:
    **info**
  * `SIDECAR_LOGGING_FORMAT`: Logging format to use (text, json) **text**
  * `SIDECAR_DISCOVERY`: Which discovery backends to use as a csv array
-   (static, docker) **`[ docker ]`**
+   (static, docker, kubelet) **`[ docker ]`**
  * `SIDECAR_SEEDS`: csv array of IP addresses used to seed the cluster.
  * `SIDECAR_CLUSTER_NAME`: The name of the Sidecar cluster. Restricts membership
    to hosts with the same cluster name.
@@ -199,6 +191,10 @@ Defaults are in bold at the end of the line:
 
  * `DOCKER_URL`: How to connect to Docker if Docker discovery is enabled.
    **`unix:///var/run/docker.sock`**
+
+ * `KUBELET_URL`: The URL, usually the HTTPS URL, on which to talk to the
+   Kubelet if enabled. Because the Kubelet usually uses a self-signed cert,
+   CA validation will be skipped. **`https://localhost:10250/pods/`**
 
  * `STATIC_CONFIG_FILE`: The config file to use if static discovery is enabled
    **`static.json`**
@@ -238,14 +234,14 @@ protocol (Memberlist) runs on.
 
 ## Discovery
 
-Sidecar supports both Docker-based discovery and a discovery mechanism where
-you publish services into a JSON file locally, called "static". These can then
-be advertised as running services just like they would be from a Docker host.
-These are configured with the `SIDECAR_DISCOVERY` environment variable. Using
-both would look like:
+Sidecar supports Docker-based discovery, discovery from a Kubernetes Kubelet,
+and a discovery mechanism where you publish services into a JSON file locally,
+called "static". These can then be advertised as running services just like
+they would be from a Docker host.  These are configured with the
+`SIDECAR_DISCOVERY` environment variable. Using all three would look like:
 
 ```bash
-export SIDECAR_DISCOVERY=static,docker
+export SIDECAR_DISCOVERY=static,docker,kubelet
 ```
 
 Zero or more options may be supplied. Note that if nothing is in this section,
